@@ -2,6 +2,7 @@
 設定モジュール
 
 環境変数から Bedrock Knowledge Base の設定を読み込む。
+Retrieve API を使用するため、基盤モデル ARN は不要。
 """
 
 import os
@@ -16,11 +17,9 @@ class KBConfig:
     Attributes:
         aws_region: AWS リージョン
         kb_id: Knowledge Base ID
-        model_arn: Bedrock モデルの ARN
     """
     aws_region: str
     kb_id: str
-    model_arn: str
 
 
 def load_config() -> KBConfig:
@@ -30,7 +29,6 @@ def load_config() -> KBConfig:
     環境変数:
         AWS_REGION: AWS リージョン（デフォルト: ap-northeast-1）
         BEDROCK_KB_ID: Knowledge Base ID（必須）
-        BEDROCK_MODEL_ARN: Bedrock モデルの ARN（必須）
     
     Returns:
         KBConfig: 設定値を含むデータクラスインスタンス
@@ -38,21 +36,11 @@ def load_config() -> KBConfig:
     Raises:
         ValueError: 必須の環境変数が設定されていない場合
     """
-    # 必須変数のチェック
-    missing_vars = []
-    
+    # 必須変数のチェック（BEDROCK_KB_ID のみ必須）
     kb_id = os.environ.get("BEDROCK_KB_ID")
     if not kb_id:
-        missing_vars.append("BEDROCK_KB_ID")
-    
-    model_arn = os.environ.get("BEDROCK_MODEL_ARN")
-    if not model_arn:
-        missing_vars.append("BEDROCK_MODEL_ARN")
-    
-    # 欠落している変数があればエラーを発生
-    if missing_vars:
         raise ValueError(
-            f"必須の環境変数が設定されていません: {', '.join(missing_vars)}"
+            "必須の環境変数が設定されていません: BEDROCK_KB_ID"
         )
     
     # AWS_REGION はデフォルト値あり
@@ -60,6 +48,5 @@ def load_config() -> KBConfig:
     
     return KBConfig(
         aws_region=aws_region,
-        kb_id=kb_id,  # type: ignore
-        model_arn=model_arn,  # type: ignore
+        kb_id=kb_id,
     )

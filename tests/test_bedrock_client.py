@@ -16,7 +16,7 @@ from hypothesis import given, strategies as st, settings
 
 from src.config import KBConfig
 from src.bedrock_client import (
-    build_retrieve_and_generate_request,
+    build_retrieve_request,
     query_knowledge_base,
     BedrockAuthenticationError,
     BedrockKBNotFoundError,
@@ -58,13 +58,11 @@ class TestProperty4RequestBuilding:
 
     任意のクエリ文字列と max_results 値に対して、構築された API リクエストは以下を含む：
     - 設定された knowledgeBaseId
-    - 設定された modelArn
     - 提供された max_results 値に設定された numberOfResults
     """
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         max_results=max_results_strategy,
@@ -73,7 +71,6 @@ class TestProperty4RequestBuilding:
     def test_request_contains_knowledge_base_id(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         max_results: int,
@@ -85,50 +82,15 @@ class TestProperty4RequestBuilding:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
-        request = build_retrieve_and_generate_request(config, query, max_results)
+        request = build_retrieve_request(config, query, max_results)
 
         # knowledgeBaseId が正しく設定されていることを検証
-        kb_config = request["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"]
-        assert kb_config["knowledgeBaseId"] == kb_id
+        assert request["knowledgeBaseId"] == kb_id
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
-        aws_region=aws_region_strategy,
-        query=query_strategy,
-        max_results=max_results_strategy,
-    )
-    @settings(max_examples=100)
-    def test_request_contains_model_arn(
-        self,
-        kb_id: str,
-        model_arn: str,
-        aws_region: str,
-        query: str,
-        max_results: int,
-    ):
-        """
-        任意の設定値に対して、構築されたリクエストには
-        設定された modelArn が含まれる。
-        """
-        config = KBConfig(
-            aws_region=aws_region,
-            kb_id=kb_id,
-            model_arn=model_arn,
-        )
-
-        request = build_retrieve_and_generate_request(config, query, max_results)
-
-        # modelArn が正しく設定されていることを検証
-        kb_config = request["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"]
-        assert kb_config["modelArn"] == model_arn
-
-    @given(
-        kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         max_results=max_results_strategy,
@@ -137,7 +99,6 @@ class TestProperty4RequestBuilding:
     def test_request_contains_number_of_results(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         max_results: int,
@@ -149,19 +110,16 @@ class TestProperty4RequestBuilding:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
-        request = build_retrieve_and_generate_request(config, query, max_results)
+        request = build_retrieve_request(config, query, max_results)
 
         # numberOfResults が正しく設定されていることを検証
-        kb_config = request["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"]
-        retrieval_config = kb_config["retrievalConfiguration"]["vectorSearchConfiguration"]
+        retrieval_config = request["retrievalConfiguration"]["vectorSearchConfiguration"]
         assert retrieval_config["numberOfResults"] == max_results
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         max_results=max_results_strategy,
@@ -170,29 +128,26 @@ class TestProperty4RequestBuilding:
     def test_request_contains_query_text(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         max_results: int,
     ):
         """
         任意のクエリ文字列に対して、構築されたリクエストには
-        input.text にクエリが含まれる。
+        retrievalQuery.text にクエリが含まれる。
         """
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
-        request = build_retrieve_and_generate_request(config, query, max_results)
+        request = build_retrieve_request(config, query, max_results)
 
         # クエリテキストが正しく設定されていることを検証
-        assert request["input"]["text"] == query
+        assert request["retrievalQuery"]["text"] == query
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
     )
@@ -200,7 +155,6 @@ class TestProperty4RequestBuilding:
     def test_default_max_results_is_four(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
     ):
@@ -210,20 +164,17 @@ class TestProperty4RequestBuilding:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
         # max_results を指定せずに呼び出し
-        request = build_retrieve_and_generate_request(config, query)
+        request = build_retrieve_request(config, query)
 
         # デフォルト値 4 が設定されていることを検証
-        kb_config = request["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"]
-        retrieval_config = kb_config["retrievalConfiguration"]["vectorSearchConfiguration"]
+        retrieval_config = request["retrievalConfiguration"]["vectorSearchConfiguration"]
         assert retrieval_config["numberOfResults"] == 4
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         max_results=max_results_strategy,
@@ -232,43 +183,31 @@ class TestProperty4RequestBuilding:
     def test_request_structure_is_valid(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         max_results: int,
     ):
         """
         任意の入力に対して、構築されたリクエストは
-        RetrieveAndGenerate API の期待する構造を持つ。
+        Retrieve API の期待する構造を持つ。
         """
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
-        request = build_retrieve_and_generate_request(config, query, max_results)
+        request = build_retrieve_request(config, query, max_results)
 
         # 必須のトップレベルキーが存在することを検証
-        assert "input" in request
-        assert "retrieveAndGenerateConfiguration" in request
+        assert "knowledgeBaseId" in request
+        assert "retrievalQuery" in request
+        assert "retrievalConfiguration" in request
 
-        # input 構造の検証
-        assert "text" in request["input"]
-
-        # retrieveAndGenerateConfiguration 構造の検証
-        rag_config = request["retrieveAndGenerateConfiguration"]
-        assert rag_config["type"] == "KNOWLEDGE_BASE"
-        assert "knowledgeBaseConfiguration" in rag_config
-
-        # knowledgeBaseConfiguration 構造の検証
-        kb_config = rag_config["knowledgeBaseConfiguration"]
-        assert "knowledgeBaseId" in kb_config
-        assert "modelArn" in kb_config
-        assert "retrievalConfiguration" in kb_config
+        # retrievalQuery 構造の検証
+        assert "text" in request["retrievalQuery"]
 
         # retrievalConfiguration 構造の検証
-        retrieval_config = kb_config["retrievalConfiguration"]
+        retrieval_config = request["retrievalConfiguration"]
         assert "vectorSearchConfiguration" in retrieval_config
         assert "numberOfResults" in retrieval_config["vectorSearchConfiguration"]
 
@@ -297,7 +236,6 @@ class TestProperty6ErrorDetailsPreservation:
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         error_message=error_message_strategy,
@@ -307,7 +245,6 @@ class TestProperty6ErrorDetailsPreservation:
     def test_client_error_preserves_error_message(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         error_message: str,
@@ -320,19 +257,18 @@ class TestProperty6ErrorDetailsPreservation:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
         # ClientError をシミュレートするモッククライアント
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": error_code,
                     "Message": error_message,
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         # エラーが発生し、元のメッセージが保持されることを検証
@@ -346,7 +282,6 @@ class TestProperty6ErrorDetailsPreservation:
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         error_message=error_message_strategy,
@@ -355,7 +290,6 @@ class TestProperty6ErrorDetailsPreservation:
     def test_botocore_error_preserves_details(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         error_message: str,
@@ -367,13 +301,12 @@ class TestProperty6ErrorDetailsPreservation:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
         # BotoCoreError をシミュレートするモッククライアント
         mock_client = MagicMock()
         # BotoCoreError は直接インスタンス化できないため、サブクラスを使用
-        mock_client.retrieve_and_generate.side_effect = BotoCoreError()
+        mock_client.retrieve.side_effect = BotoCoreError()
 
         # エラーが発生することを検証
         with pytest.raises(BedrockServiceError) as exc_info:
@@ -384,7 +317,6 @@ class TestProperty6ErrorDetailsPreservation:
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         error_message=error_message_strategy,
@@ -393,7 +325,6 @@ class TestProperty6ErrorDetailsPreservation:
     def test_generic_exception_preserves_type_and_message(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         error_message: str,
@@ -405,12 +336,11 @@ class TestProperty6ErrorDetailsPreservation:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
         # 予期しない例外をシミュレートするモッククライアント
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = RuntimeError(error_message)
+        mock_client.retrieve.side_effect = RuntimeError(error_message)
 
         # エラーが発生し、型名とメッセージが保持されることを検証
         with pytest.raises(BedrockServiceError) as exc_info:
@@ -423,7 +353,6 @@ class TestProperty6ErrorDetailsPreservation:
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
         query=query_strategy,
         error_message=error_message_strategy,
@@ -433,7 +362,6 @@ class TestProperty6ErrorDetailsPreservation:
     def test_exception_chain_is_preserved(
         self,
         kb_id: str,
-        model_arn: str,
         aws_region: str,
         query: str,
         error_message: str,
@@ -445,7 +373,6 @@ class TestProperty6ErrorDetailsPreservation:
         config = KBConfig(
             aws_region=aws_region,
             kb_id=kb_id,
-            model_arn=model_arn,
         )
 
         # ClientError をシミュレートするモッククライアント
@@ -456,10 +383,10 @@ class TestProperty6ErrorDetailsPreservation:
                     "Message": error_message,
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = original_error
+        mock_client.retrieve.side_effect = original_error
 
         # エラーが発生し、例外チェーンが保持されることを検証
         with pytest.raises(BedrockServiceError) as exc_info:
@@ -467,7 +394,6 @@ class TestProperty6ErrorDetailsPreservation:
 
         # 元の例外が __cause__ として保持されていることを確認
         assert exc_info.value.__cause__ is original_error
-
 
 
 class TestAuthenticationErrorHandling:
@@ -481,21 +407,20 @@ class TestAuthenticationErrorHandling:
         return KBConfig(
             aws_region="ap-northeast-1",
             kb_id="test-kb-id",
-            model_arn="arn:aws:bedrock:ap-northeast-1::foundation-model/test",
         )
 
     def test_access_denied_raises_authentication_error(self):
         """AccessDeniedException は BedrockAuthenticationError を発生させる"""
         config = self._create_config()
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "AccessDeniedException",
                     "Message": "User is not authorized to perform this action",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockAuthenticationError) as exc_info:
@@ -508,14 +433,14 @@ class TestAuthenticationErrorHandling:
         """UnauthorizedAccessException は BedrockAuthenticationError を発生させる"""
         config = self._create_config()
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "UnauthorizedAccessException",
                     "Message": "Unauthorized access",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockAuthenticationError) as exc_info:
@@ -527,14 +452,14 @@ class TestAuthenticationErrorHandling:
         """ExpiredTokenException は BedrockAuthenticationError を発生させる"""
         config = self._create_config()
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "ExpiredTokenException",
                     "Message": "The security token included in the request is expired",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockAuthenticationError) as exc_info:
@@ -546,14 +471,14 @@ class TestAuthenticationErrorHandling:
         """InvalidIdentityToken は BedrockAuthenticationError を発生させる"""
         config = self._create_config()
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "InvalidIdentityToken",
                     "Message": "Token is invalid",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockAuthenticationError) as exc_info:
@@ -565,14 +490,14 @@ class TestAuthenticationErrorHandling:
         """UnrecognizedClientException は BedrockAuthenticationError を発生させる"""
         config = self._create_config()
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "UnrecognizedClientException",
                     "Message": "The security token is invalid",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockAuthenticationError) as exc_info:
@@ -592,7 +517,6 @@ class TestKBNotFoundErrorHandling:
         return KBConfig(
             aws_region="ap-northeast-1",
             kb_id=kb_id,
-            model_arn="arn:aws:bedrock:ap-northeast-1::foundation-model/test",
         )
 
     def test_resource_not_found_raises_kb_not_found_error(self):
@@ -600,14 +524,14 @@ class TestKBNotFoundErrorHandling:
         kb_id = "non-existent-kb-id"
         config = self._create_config(kb_id)
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "ResourceNotFoundException",
                     "Message": f"Knowledge base {kb_id} not found",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockKBNotFoundError) as exc_info:
@@ -622,14 +546,14 @@ class TestKBNotFoundErrorHandling:
         kb_id = "test-kb-123"
         config = self._create_config(kb_id)
         mock_client = MagicMock()
-        mock_client.retrieve_and_generate.side_effect = ClientError(
+        mock_client.retrieve.side_effect = ClientError(
             error_response={
                 "Error": {
                     "Code": "ResourceNotFoundException",
                     "Message": "Resource not found",
                 }
             },
-            operation_name="RetrieveAndGenerate",
+            operation_name="Retrieve",
         )
 
         with pytest.raises(BedrockKBNotFoundError) as exc_info:

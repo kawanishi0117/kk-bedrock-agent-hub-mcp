@@ -1,8 +1,8 @@
 """
 設定モジュールのプロパティテスト
 
-**Feature: bedrock-kb-mcp-server, Property 1: 設定値の正確な読み込み**
-**Feature: bedrock-kb-mcp-server, Property 2: 必須設定欠落時のエラー**
+**Feature: kk-bedrock-agent-hub-mcp, Property 1: 設定値の正確な読み込み**
+**Feature: kk-bedrock-agent-hub-mcp, Property 2: 必須設定欠落時のエラー**
 """
 
 import os
@@ -69,21 +69,21 @@ aws_region_strategy = st.sampled_from([
 
 class TestProperty1ConfigLoading:
     """
-    **Feature: bedrock-kb-mcp-server, Property 1: 設定値の正確な読み込み**
-    **検証対象: 要件 1.1, 1.2, 1.3**
+    **Feature: kk-bedrock-agent-hub-mcp, Property 1: 設定値の正確な読み込み**
+    **検証対象: 要件 1.1, 1.2**
     
-    任意の有効な設定値に対して、load_config() は環境変数から
-    正確に値を読み込み、KBConfig インスタンスを返す。
+    任意の有効な AWS_REGION と BEDROCK_KB_ID の環境変数値に対して、
+    load_config() はそれらの値を正確に含む KBConfig を返す。
+    AWS_REGION が設定されていない場合、デフォルト値 'ap-northeast-1' が使用される。
     """
 
     @given(
         kb_id=valid_string,
-        model_arn=valid_string,
         aws_region=aws_region_strategy,
     )
     @settings(max_examples=100)
     def test_config_loads_all_values_correctly(
-        self, kb_id: str, model_arn: str, aws_region: str
+        self, kb_id: str, aws_region: str
     ):
         """
         任意の有効な環境変数値に対して、load_config() は
@@ -91,31 +91,23 @@ class TestProperty1ConfigLoading:
         """
         with env_vars(
             BEDROCK_KB_ID=kb_id,
-            BEDROCK_MODEL_ARN=model_arn,
             AWS_REGION=aws_region
         ):
             config = load_config()
             
             # 全ての値が正確に読み込まれていることを検証
             assert config.kb_id == kb_id
-            assert config.model_arn == model_arn
             assert config.aws_region == aws_region
 
-    @given(
-        kb_id=valid_string,
-        model_arn=valid_string,
-    )
+    @given(kb_id=valid_string)
     @settings(max_examples=100)
-    def test_config_uses_default_region_when_not_set(
-        self, kb_id: str, model_arn: str
-    ):
+    def test_config_uses_default_region_when_not_set(self, kb_id: str):
         """
         AWS_REGION が設定されていない場合、デフォルト値
         'ap-northeast-1' が使用される。
         """
         with env_vars(
             BEDROCK_KB_ID=kb_id,
-            BEDROCK_MODEL_ARN=model_arn,
             AWS_REGION=None  # 削除
         ):
             config = load_config()
@@ -123,39 +115,27 @@ class TestProperty1ConfigLoading:
             # デフォルトリージョンが使用されていることを検証
             assert config.aws_region == "ap-northeast-1"
             assert config.kb_id == kb_id
-            assert config.model_arn == model_arn
-
 
 
 class TestProperty2MissingConfigError:
     """
-    **Feature: bedrock-kb-mcp-server, Property 2: 必須設定欠落時のエラー**
-    **検証対象: 要件 1.4**
+    **Feature: kk-bedrock-agent-hub-mcp, Property 2: 必須設定欠落時のエラー**
+    **検証対象: 要件 1.3**
     
-    必須の環境変数が欠落している場合、load_config() は
-    欠落している変数名を含む ValueError を発生させる。
+    BEDROCK_KB_ID が欠落している環境状態に対して、load_config() を呼び出すと、
+    欠落している変数名を含むエラーが発生する。
     """
 
-    @given(
-        kb_id=st.one_of(st.none(), valid_string),
-        model_arn=st.one_of(st.none(), valid_string),
-    )
+    @given(aws_region=st.one_of(st.none(), aws_region_strategy))
     @settings(max_examples=100)
-    def test_missing_required_vars_raises_error_with_var_names(
-        self, kb_id, model_arn
-    ):
+    def test_missing_kb_id_raises_error_with_var_name(self, aws_region):
         """
-        必須変数のいずれかが欠落している場合、ValueError が発生し、
-        エラーメッセージに欠落している変数名が含まれる。
+        BEDROCK_KB_ID が欠落している場合、ValueError が発生し、
+        エラーメッセージに変数名 'BEDROCK_KB_ID' が含まれる。
         """
-        # 両方とも設定されている場合はスキップ（正常ケースはProperty1でテスト済み）
-        if kb_id is not None and model_arn is not None:
-            return
-        
         with env_vars(
-            BEDROCK_KB_ID=kb_id,
-            BEDROCK_MODEL_ARN=model_arn,
-            AWS_REGION=None  # オプショナルなので削除
+            BEDROCK_KB_ID=None,
+            AWS_REGION=aws_region
         ):
             with pytest.raises(ValueError) as exc_info:
                 load_config()
@@ -163,18 +143,14 @@ class TestProperty2MissingConfigError:
             error_message = str(exc_info.value)
             
             # 欠落している変数名がエラーメッセージに含まれることを検証
-            if kb_id is None:
-                assert "BEDROCK_KB_ID" in error_message
-            if model_arn is None:
-                assert "BEDROCK_MODEL_ARN" in error_message
+            assert "BEDROCK_KB_ID" in error_message
 
-    def test_both_required_vars_missing_shows_both_names(self):
+    def test_missing_kb_id_shows_var_name_in_error(self):
         """
-        両方の必須変数が欠落している場合、両方の変数名がエラーメッセージに含まれる。
+        BEDROCK_KB_ID が欠落している場合、変数名がエラーメッセージに含まれる。
         """
         with env_vars(
             BEDROCK_KB_ID=None,
-            BEDROCK_MODEL_ARN=None,
             AWS_REGION=None
         ):
             with pytest.raises(ValueError) as exc_info:
@@ -182,4 +158,3 @@ class TestProperty2MissingConfigError:
             
             error_message = str(exc_info.value)
             assert "BEDROCK_KB_ID" in error_message
-            assert "BEDROCK_MODEL_ARN" in error_message

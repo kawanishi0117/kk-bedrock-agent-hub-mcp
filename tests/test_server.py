@@ -2,8 +2,10 @@
 MCP サーバーのユニットテスト
 
 ツールスキーマ登録の検証を行う。
+要件 4.2: パラメータの説明を含む適切なスキーマドキュメントと共に kb_answer ツールを公開
 """
 
+import json
 import pytest
 
 from src.server import mcp
@@ -18,11 +20,12 @@ class TestToolRegistration:
     
     def test_mcp_server_name(self):
         """MCP サーバーが正しい名前で初期化されていることを検証"""
-        assert mcp.name == "bedrock-kb-mcp"
+        # 要件 4.1: "kk-bedrock-agent-hub-mcp" という名前で初期化
+        assert mcp.name == "kk-bedrock-agent-hub-mcp"
     
     def test_kb_answer_tool_registered(self):
         """kb_answer ツールが登録されていることを検証"""
-        # FastMCP の内部ツールリストを確認（_tools 属性を使用）
+        # FastMCP の内部ツールリストを確認
         tool_names = [tool.name for tool in mcp._tool_manager._tools.values()]
         assert "kb_answer" in tool_names
     
@@ -69,6 +72,20 @@ class TestToolRegistration:
         assert "query" in required
         # max_results はデフォルト値があるため必須ではない
         assert "max_results" not in required
+    
+    def test_kb_answer_tool_has_description(self):
+        """kb_answer ツールに説明が含まれていることを検証"""
+        tools = mcp._tool_manager._tools
+        kb_answer_tool = None
+        for tool in tools.values():
+            if tool.name == "kb_answer":
+                kb_answer_tool = tool
+                break
+        
+        assert kb_answer_tool is not None
+        # ツールに説明があることを確認
+        assert kb_answer_tool.description is not None
+        assert len(kb_answer_tool.description) > 0
 
 
 class TestKbAnswerFunction:
@@ -90,7 +107,11 @@ class TestKbAnswerFunction:
         
         assert kb_answer_tool is not None
         result = kb_answer_tool.fn(query="")
-        assert "エラー" in result
+        
+        # JSON 形式のエラーレスポンスを検証
+        result_data = json.loads(result)
+        assert result_data["error"] is True
+        assert result_data["error_type"] == "ValidationError"
     
     def test_whitespace_query_returns_error(self):
         """空白のみのクエリがエラーメッセージを返すことを検証"""
@@ -103,4 +124,28 @@ class TestKbAnswerFunction:
         
         assert kb_answer_tool is not None
         result = kb_answer_tool.fn(query="   ")
-        assert "エラー" in result
+        
+        # JSON 形式のエラーレスポンスを検証
+        result_data = json.loads(result)
+        assert result_data["error"] is True
+        assert result_data["error_type"] == "ValidationError"
+    
+    def test_error_response_format(self):
+        """エラーレスポンスが正しい JSON 形式であることを検証"""
+        tools = mcp._tool_manager._tools
+        kb_answer_tool = None
+        for tool in tools.values():
+            if tool.name == "kb_answer":
+                kb_answer_tool = tool
+                break
+        
+        assert kb_answer_tool is not None
+        result = kb_answer_tool.fn(query="")
+        
+        # JSON としてパース可能であることを確認
+        result_data = json.loads(result)
+        
+        # 必須フィールドの存在確認
+        assert "error" in result_data
+        assert "error_type" in result_data
+        assert "message" in result_data

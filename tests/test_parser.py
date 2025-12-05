@@ -7,8 +7,8 @@
 
 from hypothesis import given, strategies as st, settings
 
-from src.parser import parse_response
-from src.models import Citation, KBResponse
+from src.parser import parse_retrieve_response
+from src.models import RetrievalResult, KBResponse
 
 
 # ロケーション情報を生成するストラテジー
@@ -25,8 +25,8 @@ score_strategy = st.one_of(
     st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
 )
 
-# 単一の引用参照を生成するストラテジー
-citation_ref_strategy = st.fixed_dictionaries({
+# 単一の検索結果を生成するストラテジー
+retrieval_result_strategy = st.fixed_dictionaries({
     "content": st.fixed_dictionaries({
         "text": st.text(min_size=0, max_size=500),
     }),
@@ -34,17 +34,9 @@ citation_ref_strategy = st.fixed_dictionaries({
     "score": score_strategy,
 })
 
-# 引用グループを生成するストラテジー
-citation_group_strategy = st.fixed_dictionaries({
-    "retrievedReferences": st.lists(citation_ref_strategy, min_size=0, max_size=5),
-})
-
-# 有効な Bedrock API レスポンスを生成するストラテジー
-valid_response_strategy = st.fixed_dictionaries({
-    "output": st.fixed_dictionaries({
-        "text": st.text(min_size=0, max_size=1000),
-    }),
-    "citations": st.lists(citation_group_strategy, min_size=0, max_size=3),
+# 有効な Bedrock Retrieve API レスポンスを生成するストラテジー
+valid_retrieve_response_strategy = st.fixed_dictionaries({
+    "retrievalResults": st.lists(retrieval_result_strategy, min_size=0, max_size=10),
 })
 
 
@@ -53,88 +45,84 @@ class TestProperty3ResponseParsing:
     **Feature: bedrock-kb-mcp-server, Property 3: レスポンスパースで全フィールドを抽出**
     **検証対象: 要件 2.2, 2.3, 2.5**
 
-    任意の有効な Bedrock RetrieveAndGenerate API レスポンスに対して、
+    任意の有効な Bedrock Retrieve API レスポンスに対して、
     パース結果は以下を満たす：
-    - answer フィールドは API レスポンスの output.text と等しい
-    - 各引用は retrievedReferences から抽出された content, location, score を含む
+    - results の数は retrievalResults の数と等しい
+    - 各結果は retrievalResults から抽出された content, location, score を含む
     """
 
-    @given(response=valid_response_strategy)
+    @given(response=valid_retrieve_response_strategy)
     @settings(max_examples=100)
-    def test_answer_equals_output_text(self, response: dict):
+    def test_results_count_matches_retrieval_results(self, response: dict):
         """
-        任意の有効なレスポンスに対して、パース結果の answer は
-        元のレスポンスの output.text と等しい。
+        任意の有効なレスポンスに対して、パース結果の results 数は
+        元のレスポンスの retrievalResults 数と等しい。
         """
-        result = parse_response(response)
+        result = parse_retrieve_response(response)
 
-        expected_answer = response["output"]["text"]
-        assert result.answer == expected_answer
+        expected_count = len(response.get("retrievalResults", []))
+        assert len(result.results) == expected_count
 
-    @given(response=valid_response_strategy)
+    @given(response=valid_retrieve_response_strategy)
     @settings(max_examples=100)
-    def test_citations_extracted_from_retrieved_references(self, response: dict):
+    def test_result_fields_match_source(self, response: dict):
         """
-        任意の有効なレスポンスに対して、パース結果の citations は
-        retrievedReferences から正しく抽出される。
+        任意の有効なレスポンスに対して、各結果の content, location, score は
+        元の retrievalResults の値と一致する。
         """
-        result = parse_response(response)
+        result = parse_retrieve_response(response)
 
-        # 期待される引用の総数を計算
-        expected_count = sum(
-            len(group.get("retrievedReferences", []))
-            for group in response.get("citations", [])
-        )
-        assert len(result.citations) == expected_count
+        expected_items = response.get("retrievalResults", [])
 
-    @given(response=valid_response_strategy)
-    @settings(max_examples=100)
-    def test_citation_fields_match_source(self, response: dict):
-        """
-        任意の有効なレスポンスに対して、各引用の content, location, score は
-        元の retrievedReferences の値と一致する。
-        """
-        result = parse_response(response)
+        # 各結果が正しくパースされていることを検証
+        assert len(result.results) == len(expected_items)
 
-        # 元のレスポンスから全ての引用参照をフラット化
-        expected_refs = []
-        for group in response.get("citations", []):
-            for ref in group.get("retrievedReferences", []):
-                expected_refs.append(ref)
-
-        # 各引用が正しくパースされていることを検証
-        assert len(result.citations) == len(expected_refs)
-
-        for citation, ref in zip(result.citations, expected_refs):
+        for parsed_result, item in zip(result.results, expected_items):
             # content の検証
-            expected_content = ref.get("content", {}).get("text", "")
-            assert citation.content == expected_content
+            expected_content = item.get("content", {}).get("text", "")
+            assert parsed_result.content == expected_content
 
             # location の検証
-            expected_location = ref.get("location", {})
-            assert citation.location == expected_location
+            expected_location = item.get("location", {})
+            assert parsed_result.location == expected_location
 
             # score の検証
-            expected_score = ref.get("score")
+            expected_score = item.get("score")
             if expected_score is not None:
-                assert citation.score == float(expected_score)
+                assert parsed_result.score == float(expected_score)
             else:
-                assert citation.score is None
+                assert parsed_result.score is None
 
-    @given(answer_text=st.text(min_size=0, max_size=500))
+    @given(response=valid_retrieve_response_strategy)
     @settings(max_examples=100)
-    def test_empty_citations_returns_empty_list(self, answer_text: str):
+    def test_all_results_are_retrieval_result_type(self, response: dict):
         """
-        citations が空または存在しない場合、空のリストが返される。
+        任意の有効なレスポンスに対して、全ての結果は RetrievalResult 型である。
         """
-        # citations が空のレスポンス
-        response_empty = {"output": {"text": answer_text}, "citations": []}
-        result_empty = parse_response(response_empty)
-        assert result_empty.citations == []
-        assert result_empty.answer == answer_text
+        result = parse_retrieve_response(response)
 
-        # citations が存在しないレスポンス
-        response_missing = {"output": {"text": answer_text}}
-        result_missing = parse_response(response_missing)
-        assert result_missing.citations == []
-        assert result_missing.answer == answer_text
+        for item in result.results:
+            assert isinstance(item, RetrievalResult)
+
+    def test_empty_retrieval_results_returns_empty_list(self):
+        """
+        retrievalResults が空または存在しない場合、空のリストが返される。
+        """
+        # retrievalResults が空のレスポンス
+        response_empty = {"retrievalResults": []}
+        result_empty = parse_retrieve_response(response_empty)
+        assert result_empty.results == []
+
+        # retrievalResults が存在しないレスポンス
+        response_missing = {}
+        result_missing = parse_retrieve_response(response_missing)
+        assert result_missing.results == []
+
+    @given(response=valid_retrieve_response_strategy)
+    @settings(max_examples=100)
+    def test_returns_kb_response_type(self, response: dict):
+        """
+        任意の有効なレスポンスに対して、戻り値は KBResponse 型である。
+        """
+        result = parse_retrieve_response(response)
+        assert isinstance(result, KBResponse)

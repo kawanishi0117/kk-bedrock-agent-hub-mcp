@@ -1,16 +1,18 @@
-# Bedrock Knowledge Base MCP Server
+# kk-bedrock-agent-hub-mcp
 
 Amazon Bedrock Knowledge Base にクエリを送信する MCP (Model Context Protocol) サーバーです。
 
 ## 概要
 
-このサーバーは、AI アシスタント（Claude Desktop、Cursor、Kiro）が Amazon Bedrock Knowledge Base から情報を取得できるようにする `kb_answer` ツールを提供します。
+**kk-bedrock-agent-hub-mcp** は、AI アシスタント（Claude Desktop、Cursor、Kiro）が Amazon Bedrock Knowledge Base から情報を取得できるようにする `kb_answer` ツールを提供します。
+
+**注意:** このサーバーは `Retrieve` API を使用し、純粋な検索機能のみを提供します。回答生成（RetrieveAndGenerate）は行わず、基盤モデル ARN は不要です。
 
 ## 機能
 
-- Bedrock RetrieveAndGenerate API を使用した Knowledge Base クエリ
+- Bedrock Retrieve API を使用した Knowledge Base 検索
 - 環境変数ベースの設定管理
-- 引用情報（ソース、スコア）の抽出と返却
+- 検索結果（コンテンツ、ロケーション、スコア）の抽出と返却
 - 入力バリデーション
 
 ## 環境変数
@@ -19,7 +21,6 @@ Amazon Bedrock Knowledge Base にクエリを送信する MCP (Model Context Pro
 |--------|------|------------|------|
 | `AWS_REGION` | いいえ | `ap-northeast-1` | AWS リージョン |
 | `BEDROCK_KB_ID` | はい | - | Knowledge Base ID |
-| `BEDROCK_MODEL_ARN` | はい | - | 基盤モデルの ARN |
 | `AWS_PROFILE` | いいえ | - | AWS 認証プロファイル |
 
 ### 環境変数の設定例
@@ -28,19 +29,29 @@ Amazon Bedrock Knowledge Base にクエリを送信する MCP (Model Context Pro
 # Linux/macOS
 export AWS_REGION="ap-northeast-1"
 export BEDROCK_KB_ID="your-knowledge-base-id"
-export BEDROCK_MODEL_ARN="arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
 
 # Windows (PowerShell)
 $env:AWS_REGION = "ap-northeast-1"
 $env:BEDROCK_KB_ID = "your-knowledge-base-id"
-$env:BEDROCK_MODEL_ARN = "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
 ```
 
 ## インストール
 
+### 方法1: Git Clone（推奨）
+
 ```bash
-# 開発モードでインストール
-pip install -e ".[dev]"
+# リポジトリをクローン
+git clone https://github.com/kawanishi0117/mcp-bedrock-kb.git
+cd mcp-bedrock-kb
+
+# 依存関係をインストール
+pip install -e .
+```
+
+### 方法2: pip で直接インストール
+
+```bash
+pip install git+https://github.com/kawanishi0117/mcp-bedrock-kb.git
 ```
 
 ## 使用方法
@@ -51,13 +62,16 @@ pip install -e ".[dev]"
 python kb_mcp_server.py
 ```
 
-### コマンドラインから実行
+### コマンドラインから実行（pip インストール後）
 
 ```bash
 bedrock-kb-mcp
 ```
 
+
 ## MCP クライアント設定
+
+クローンしたディレクトリの絶対パスを指定してください。
 
 ### Claude Desktop
 
@@ -66,13 +80,11 @@ bedrock-kb-mcp
 ```json
 {
   "mcpServers": {
-    "bedrock-kb": {
+    "kk-bedrock-agent-hub-mcp": {
       "command": "python",
-      "args": ["path/to/kb_mcp_server.py"],
+      "args": ["/path/to/mcp-bedrock-kb/kb_mcp_server.py"],
       "env": {
-        "AWS_REGION": "ap-northeast-1",
-        "BEDROCK_KB_ID": "your-kb-id",
-        "BEDROCK_MODEL_ARN": "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+        "BEDROCK_KB_ID": "your-kb-id"
       }
     }
   }
@@ -86,13 +98,11 @@ bedrock-kb-mcp
 ```json
 {
   "mcpServers": {
-    "bedrock-kb": {
+    "kk-bedrock-agent-hub-mcp": {
       "command": "python",
-      "args": ["path/to/kb_mcp_server.py"],
+      "args": ["/path/to/mcp-bedrock-kb/kb_mcp_server.py"],
       "env": {
-        "AWS_REGION": "ap-northeast-1",
-        "BEDROCK_KB_ID": "your-kb-id",
-        "BEDROCK_MODEL_ARN": "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+        "BEDROCK_KB_ID": "your-kb-id"
       }
     }
   }
@@ -101,18 +111,53 @@ bedrock-kb-mcp
 
 ### Kiro
 
-`.kiro/settings/mcp.json` に以下を追加:
+`~/.kiro/settings/mcp.json`（グローバル）または `.kiro/settings/mcp.json`（ワークスペース）に以下を追加:
 
 ```json
 {
   "mcpServers": {
-    "bedrock-kb": {
+    "kk-bedrock-agent-hub-mcp": {
       "command": "python",
-      "args": ["path/to/kb_mcp_server.py"],
+      "args": ["/path/to/mcp-bedrock-kb/kb_mcp_server.py"],
       "env": {
-        "AWS_REGION": "ap-northeast-1",
+        "BEDROCK_KB_ID": "your-kb-id"
+      }
+    }
+  }
+}
+```
+
+### Windows の場合
+
+パスはスラッシュ `/` またはダブルバックスラッシュ `\\` を使用:
+
+```json
+{
+  "mcpServers": {
+    "kk-bedrock-agent-hub-mcp": {
+      "command": "python",
+      "args": ["C:/Users/username/mcp-bedrock-kb/kb_mcp_server.py"],
+      "env": {
+        "BEDROCK_KB_ID": "your-kb-id"
+      }
+    }
+  }
+}
+```
+
+### AWS_PROFILE を使用する場合
+
+AWS 認証プロファイルを指定する場合は `AWS_PROFILE` 環境変数を追加:
+
+```json
+{
+  "mcpServers": {
+    "kk-bedrock-agent-hub-mcp": {
+      "command": "python",
+      "args": ["/path/to/mcp-bedrock-kb/kb_mcp_server.py"],
+      "env": {
         "BEDROCK_KB_ID": "your-kb-id",
-        "BEDROCK_MODEL_ARN": "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+        "AWS_PROFILE": "your-profile-name"
       }
     }
   }
@@ -133,6 +178,18 @@ bedrock-kb-mcp
 ```
 kb_answer("製品の返品ポリシーについて教えてください")
 kb_answer("技術仕様を詳しく説明してください", max_results=8)
+```
+
+### レスポンス形式
+
+検索結果は以下の形式で返されます:
+
+```json
+{
+  "content": "ドキュメントチャンクのテキスト内容",
+  "location": {"s3Location": {...}, "type": "S3"},
+  "score": 0.85
+}
 ```
 
 ## 開発
