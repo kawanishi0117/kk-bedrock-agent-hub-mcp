@@ -1,0 +1,44 @@
+# Python キャッシュ
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# テスト関連
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# 仮想環境
+venv/
+.venv/
+env/
+.env/
+
+# IDE・エディタ
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ビルド・配布
+build/
+dist/
+*.egg-info/
+*.egg
+
+# 環境変数ファイル（機密情報）
+.env
+.env.local
+.env.*.local
+
+# OS 生成ファイル
+.DS_Store
+Thumbs.db
+
+# ログ
+*.log
